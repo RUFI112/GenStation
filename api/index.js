@@ -16,8 +16,8 @@ const SYSTEM_PROMPT = [
   "Если не знаешь ответа, честно скажи об этом."
 ].join(" ");
 
-function aliceResponse(text, endSession = false, history = []) {
-  return {
+function aliceResponse(text, endSession = false, history = [], userState = null) {
+  const result = {
     version: "1.0",
     response: {
       text: fitAliceText(text),
@@ -25,6 +25,12 @@ function aliceResponse(text, endSession = false, history = []) {
     },
     session_state: { history }
   };
+
+  if (userState && typeof userState === "object") {
+    result.user_state = userState;
+  }
+
+  return result;
 }
 
 function fitAliceText(value) {
@@ -214,15 +220,25 @@ export default async function handler(req, res) {
 
   const startedAt = Date.now();
   const remainingMs = () => TOTAL_RESPONSE_BUDGET_MS - (Date.now() - startedAt);
+
   const body = req.body && typeof req.body === "object" ? req.body : {};
   const text = String(body?.request?.command || body?.request?.original_utterance || "").trim();
-  const oldHistory = safeHistory(body?.state?.session?.history);
+
+  // Постоянное состояние пользователя (если включено хранилище в Яндекс.Диалогах)
+  const oldUserState =
+    body?.state?.user && typeof body.state.user === "object" ? body.state.user : {};
+
+  // История: приоритет у сессионной, если её нет — берём из user_state
+  const oldHistory = safeHistory(
+    body?.state?.session?.history || oldUserState.history
+  );
 
   if (!text) {
     return res.status(200).json(aliceResponse(
       "Привет! Я могу ответить на вопрос или найти актуальную информацию. Что хочешь узнать?",
       false,
-      oldHistory
+      oldHistory,
+      oldUserState
     ));
   }
 
@@ -230,7 +246,10 @@ export default async function handler(req, res) {
     let searchContext = "";
     if (isSearchIntent(text) && process.env.SERPER_API_KEY) {
       // Search has a very short budget because Alice expects a response within 4.5 seconds.
-      searchContext = await searchWeb(text, Math.min(SERPER_TIMEOUT_MS, Math.max(0, remainingMs() - 2600)));
+      searchContext = await searchWeb(
+        text,
+        Math.min(SERPER_TIMEOUT_MS, Math.max(0, remainingMs() - 2600))
+      );
     }
 
     const answer = await askGemini(
@@ -246,11 +265,22 @@ export default async function handler(req, res) {
       { role: "model", text: answer.slice(0, MAX_HISTORY_MESSAGE_CHARS) }
     ].slice(-MAX_HISTORY_MESSAGES);
 
-    return res.status(200).json(aliceResponse(answer, false, history));
+    // Сохраняем историю в постоянном состоянии пользователя
+    const newUserState = {
+      ...oldUserState,
+      history
+    };
+
+    return res.status(200).json(aliceResponse(answer, false, history, newUserState));
   } catch (error) {
     const safeError = error?.message === "AbortError" ? "TIME_BUDGET_EXHAUSTED" : error;
     console.warn("Alice webhook returned a fallback response:", safeError?.message || "unknown error");
-    return res.status(200).json(aliceResponse(errorForUser(safeError), false, oldHistory));
+    return res.status(200).json(aliceResponse(
+      errorForUser(safeError),
+      false,
+      oldHistory,
+      oldUserState
+    ));
   }
 }
 
