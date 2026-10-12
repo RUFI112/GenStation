@@ -140,7 +140,6 @@ async function askGemini(text, history, searchContext, timeoutMs) {
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents,
         generationConfig: {
-          temperature: 0.5,
           maxOutputTokens: 240
         }
       })
