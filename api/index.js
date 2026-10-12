@@ -87,14 +87,11 @@ async function searchWeb(query, timeoutMs) {
       Math.min(SERPER_TIMEOUT_MS, timeoutMs)
     );
 
-if (!response.ok) {
-  const status = Number(response.status);
-  const errorBody = JSON.stringify(data).slice(0, 500);
-  console.error("Gemini request failed with HTTP", status, errorBody);
-  if (status === 401 || status === 403) throw new Error("GEMINI_KEY_REJECTED");
-  if (status === 429) throw new Error("GEMINI_QUOTA");
-  throw new Error("GEMINI_REQUEST_FAILED");
-}
+    if (!response.ok) {
+      console.warn("Serper request failed with HTTP", response.status);
+      return "";
+    }
+
     const items = (Array.isArray(data.organic) ? data.organic : [])
       .slice(0, 3)
       .map((item, i) => {
@@ -152,9 +149,16 @@ async function askGemini(text, history, searchContext, timeoutMs) {
 
   if (!response.ok) {
     const status = Number(response.status);
-    console.error("Gemini request failed with HTTP", status);
-    if (status === 401 || status === 403) throw new Error("GEMINI_KEY_REJECTED");
-    if (status === 429) throw new Error("GEMINI_QUOTA");
+    const errorBody = JSON.stringify(data).slice(0, 500);
+    console.error("Gemini request failed with HTTP", status, errorBody);
+
+    if (status === 401 || status === 403) {
+      throw new Error("GEMINI_KEY_REJECTED");
+    }
+    if (status === 429) {
+      throw new Error("GEMINI_QUOTA");
+    }
+
     throw new Error("GEMINI_REQUEST_FAILED");
   }
 
