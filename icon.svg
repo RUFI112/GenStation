@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+<defs>
+<!-- Основной градиент фона: фиолетовый Алисы -> глубокий индиго -->
+<linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#7B1FA2"/>
+<stop offset="50%" stop-color="#4A148C"/>
+<stop offset="100%" stop-color="#1A0933"/>
+</linearGradient>
+​<!-- Неоновый градиент звезды Gemini: лазурно-голубой -> фиолетовый -->
+<linearGradient id="geminiSpark" x1="0%" y1="0%" x2="100%" y2="100%">
+<stop offset="0%" stop-color="#00F0FF"/>
+<stop offset="45%" stop-color="#70A6FF"/>
+<stop offset="100%" stop-color="#B388FF"/>
+</linearGradient>
+​<!-- Градиент звуковых волн -->
+<linearGradient id="waveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+<stop offset="0%" stop-color="#00E5FF"/>
+<stop offset="100%" stop-color="#D500F9"/>
+</linearGradient>
+​<!-- Свечение для элементов -->
+<filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+<feGaussianBlur stdDeviation="12" result="blur"/>
+<feComposite in="SourceGraphic" in2="blur" operator="over"/>
+</filter>
+</defs>
+​<!-- Скругленная подложка иконки для маркетплейса Диалогов -->
+<rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+​<!-- Внешний акцентный световой ореол -->
+<circle cx="256" cy="256" r="190" fill="none" stroke="#9C27B0" stroke-width="2" stroke-opacity="0.3"/>
+<circle cx="256" cy="256" r="150" fill="none" stroke="#00E5FF" stroke-width="1.5" stroke-opacity="0.25" stroke-dasharray="8 8"/>
+​<!-- Центральная четырехконечная звезда нейросети Google Gemini -->
+<g filter="url(#glow)">
+<path d="M256,96 C256,184 328,256 416,256 C328,256 256,328 256,416 C256,328 184,256 96,256 C184,256 256,184 256,96 Z" fill="url(#geminiSpark)"/>
+</g>
+​<!-- Динамические звуковые волны голосового помощника Алисы в центре звезды -->
+<g fill="url(#waveGrad)">
+<!-- Левая малая полоса -->
+<rect x="208" y="232" width="10" height="48" rx="5"/>
+<!-- Левая средняя полоса -->
+<rect x="230" y="212" width="10" height="88" rx="5"/>
+<!-- Центральная высокая полоса -->
+<rect x="251" y="196" width="10" height="120" rx="5" fill="#FFFFFF"/>
+<!-- Правая средняя полоса -->
+<rect x="272" y="212" width="10" height="88" rx="5"/>
+<!-- Правая малая полоса -->
+<rect x="294" y="232" width="10" height="48" rx="5"/>
+</g>
+​<!-- Искорки-акценты интеллекта -->
+<circle cx="360" cy="148" r="6" fill="#00F0FF" filter="url(#glow)"/>
+<circle cx="152" cy="364" r="5" fill="#E040FB" filter="url(#glow)"/>
+</svg>
