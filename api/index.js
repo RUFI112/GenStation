@@ -1,3 +1,4 @@
+```javascript
 // Базовая модель Gemini по умолчанию
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
@@ -99,12 +100,23 @@ function getActionButtons(isHelp = false) {
 
 // Функция для сборки финального JSON-ответа по стандарту протокола Яндекс Диалогов
 function aliceResponse(text, options = {}) {
-  const {
-    endSession = false,
-    history = [],
-    userState = null,
-    buttons = null
-  } = options;
+  let endSession = false;
+  let history = [];
+  let userState = null;
+  let buttons = null;
+
+  // Поддержка передачи параметров как объектом опций, так и позиционными аргументами
+  if (typeof options === "boolean") {
+    endSession = options;
+    if (arguments.length > 2 && Array.isArray(arguments[2])) history = arguments[2];
+    if (arguments.length > 3) userState = arguments[3];
+    if (arguments.length > 4) buttons = arguments[4];
+  } else if (options && typeof options === "object") {
+    endSession = Boolean(options.endSession);
+    history = Array.isArray(options.history) ? options.history : [];
+    userState = options.userState || null;
+    buttons = options.buttons || null;
+  }
 
   const cleanText = fitAliceText(text);
   const cleanTts = formatSpeechTts(text);
@@ -338,6 +350,7 @@ export default async function handler(req, res) {
   // Обработка GET-запроса для проверки работоспособности сервиса
   if (req.method === "GET") {
     return res.status(200).json({
+      ok: true,
       status: "ok",
       service: "alice-gemini-skill",
       model: DEFAULT_MODEL
@@ -498,3 +511,4 @@ export {
   isResetIntent,
   safeHistory
 };
+```
