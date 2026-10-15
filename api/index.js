@@ -1,4 +1,3 @@
-```javascript
 // Базовая модель Gemini по умолчанию
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
@@ -22,7 +21,7 @@ const GEMINI_TIMEOUT_MS = 3100;
 
 // Системный промпт, задающий роль, правила и голосовой стиль ассистента
 const SYSTEM_PROMPT = [
-  "Ты — голосовой помощник Джимини, работающий на базе нейросети Gemini от Google для Яндекс Алисы.",
+  "Ты – голосовой помощник Джимини, работающий на базе нейросети Gemini от Google для Яндекс Алисы.",
   "Твой ответ будет озвучен синтезатором речи на умных колонках и устройствах Яндекса.",
   "Отвечай строго на русском языке, живо, дружелюбно и по существу.",
   "Длина ответа: строго от 1 до 3 емких предложений, без долгих вступлений.",
@@ -32,12 +31,12 @@ const SYSTEM_PROMPT = [
   "Если информации нет или ответ неизвестен, честно скажи об этом одной фразой."
 ].join(" ");
 
-// Функция для очистки текста от Markdown-символов, ссылок и служебных тегов
+// Очистка текста от Markdown-символов, ссылок и служебных тегов
 function cleanMarkdown(text) {
   return String(text || "")
     .replace(/```[\s\S]*?```/g, "")
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*+\*([^*]+)\*+\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/_([^_]+)_/g, "$1")
@@ -46,10 +45,10 @@ function cleanMarkdown(text) {
     .replace(/^\s*\d+\.\s+/gm, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/https?:\/\/\S+/gi, "")
-    .replace(/[#*_~`<>]/g, "");
+    .replace(/[#*^_`~<>]/g, "");
 }
 
-// Функция для подготовки текста к озвучиванию и укладывания в лимиты Алисы
+// Подготовка текста к озвучиванию и укладывание в лимиты Алисы
 function fitAliceText(value) {
   const text = cleanMarkdown(value)
     .replace(/[\r\n\t]+/g, " ")
@@ -59,7 +58,7 @@ function fitAliceText(value) {
   if (!text) return "Не удалось получить ответ.";
   if (text.length <= MAX_ALICE_TEXT) return text;
 
-  const candidate = text.slice(0, MAX_ALICE_TEXT - 1);
+  const candidate = text.slice(0, MAX_ALICE_TEXT);
   const sentenceEnd = Math.max(
     candidate.lastIndexOf(". "),
     candidate.lastIndexOf("! "),
@@ -70,19 +69,25 @@ function fitAliceText(value) {
     return candidate.slice(0, sentenceEnd + 1).trim();
   }
 
-  const lastSpace = candidate.lastIndexOf(" ");
-  return ((lastSpace > 200 ? candidate.slice(0, lastSpace) : candidate).trim()) + "…";
+  const lastSpace = candidate.slice(0, MAX_ALICE_TEXT - 3).lastIndexOf(" ");
+  if (lastSpace > 200) {
+    return candidate.slice(0, lastSpace).trim() + "...";
+  }
+
+  return candidate.slice(0, MAX_ALICE_TEXT - 3).trim() + "...";
 }
 
-// Функция для формирования разметки TTS с естественными паузами
+// Формирование разметки TTS с естественными паузами и контролем длины
 function formatSpeechTts(text) {
-  return fitAliceText(text)
+  const formatted = String(text || "")
     .replace(/\s*—\s*/g, " - ")
     .replace(/\s+/g, " ")
     .trim();
+
+  return fitAliceText(formatted);
 }
 
-// Функция для генерации кнопок быстрых ответов (саджестов) на экранах
+// Генерация кнопок быстрых ответов (саджестов) на экранах
 function getActionButtons(isHelp = false) {
   if (isHelp) {
     return [
@@ -98,14 +103,13 @@ function getActionButtons(isHelp = false) {
   ];
 }
 
-// Функция для сборки финального JSON-ответа по стандарту протокола Яндекс Диалогов
+// Сборка финального JSON-ответа по стандарту протокола Яндекс Диалогов
 function aliceResponse(text, options = {}) {
   let endSession = false;
   let history = [];
   let userState = null;
   let buttons = null;
 
-  // Поддержка передачи параметров как объектом опций, так и позиционными аргументами
   if (typeof options === "boolean") {
     endSession = options;
     if (arguments.length > 2 && Array.isArray(arguments[2])) history = arguments[2];
@@ -142,27 +146,51 @@ function aliceResponse(text, options = {}) {
   return result;
 }
 
+// Нормализация пользовательского текста для сопоставления интентов
+function normalizeIntentText(text) {
+  return String(text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?,;:]+$/g, "")
+    .trim();
+}
+
 // Проверка на команду выхода и завершения сессии
 function isExitIntent(text) {
-  return /^(хватит|стоп|выход|пока|отмена|закройся|до свидания|завершить|отбой)$/i.test(text.trim());
+  const normalized = normalizeIntentText(text);
+  return /^(хватит|стоп|выход|пока|отмена|закройся|до свидания|завершить|отбой)$/i.test(normalized);
 }
 
-// Проверка на запрос помощи или описания возможностей
+// Проверка на запрос помощи или описания возможностей (включая саджест "Кто ты?")
 function isHelpIntent(text) {
-  return /^(помощь|что ты умеешь|справка|как пользоваться|команды)$/i.test(text.trim());
+  const normalized = normalizeIntentText(text);
+  return /^(помощь|что ты умеешь|справка|как пользоваться|команды|кто ты)$/i.test(normalized);
 }
 
-// Проверка на команду сброса истории текущей беседы
+// Проверка на команду сброса истории диалога (включая саджест "Сбросить диалог")
 function isResetIntent(text) {
-  return /^(забудь|сброс|очисти историю|начни сначала|забудь всё|сбрось контекст)$/i.test(text.trim());
+  const normalized = normalizeIntentText(text);
+  return /^(забудь|сброс|сбросить диалог|сбрось диалог|очисти историю|очистить историю|начни сначала|забудь всё|забудь все|сбрось контекст|сбросить контекст)$/i.test(normalized);
 }
 
-// Проверка необходимости обращения к веб-поиску за свежими данными
+// Проверка на запрос повтора последней реплики ассистента
+function isRepeatIntent(text) {
+  const normalized = normalizeIntentText(text);
+  return /^(повтори|повтори ответ|что ты сказала|еще раз|ещё раз|повтори пожалуйста)$/i.test(normalized);
+}
+
+// Проверка на диагностический запрос доступности (ping)
+function isPingIntent(text) {
+  const normalized = normalizeIntentText(text);
+  return /^(ping|пинг)$/i.test(normalized);
+}
+
+// Проверка необходимости веб-поиска (включая саджест "Что нового в мире?")
 function isSearchIntent(text) {
-  return /\b(latest|today|current|news|weather|price|rate|recent|search|look up)\b|сегодня|сейчас|последн|новост|погод|курс|найди|поищи|актуальн|сколько стоит|свеж|результат матча/i.test(text);
+  return /\b(latest|today|current|news|weather|price|rate|recent|search|look up)\b|сегодня|сейчас|последн|новост|что нового|погод|курс|найди|поищи|актуальн|сколько стоит|свеж|результат матча/i.test(text);
 }
 
-// Функция нормализации истории сообщений и чередования ролей для Gemini API
+// Нормализация истории сообщений и чередования ролей для Gemini API
 function safeHistory(history) {
   if (!Array.isArray(history)) return [];
 
@@ -173,7 +201,6 @@ function safeHistory(history) {
       text: item.text.trim().slice(0, MAX_HISTORY_MESSAGE_CHARS)
     }));
 
-  // Gemini требует строгого чередования ролей без дублей подряд
   const alternated = [];
   for (const msg of valid) {
     if (alternated.length === 0) {
@@ -188,10 +215,15 @@ function safeHistory(history) {
     }
   }
 
-  return alternated.slice(-MAX_HISTORY_MESSAGES);
+  let trimmed = alternated.slice(-MAX_HISTORY_MESSAGES);
+  if (trimmed.length > 0 && trimmed[0].role === "model") {
+    trimmed = trimmed.slice(1);
+  }
+
+  return trimmed;
 }
 
-// Функция выполнения сетевых HTTP-запросов с безопасным контролем таймаута
+// Выполнение сетевых HTTP-запросов с безопасным контролем таймаута
 async function fetchWithTimeout(url, options, timeoutMs) {
   const ms = Math.max(100, timeoutMs);
   let timer;
@@ -216,7 +248,7 @@ async function fetchWithTimeout(url, options, timeoutMs) {
   }
 }
 
-// Функция поиска свежих данных в интернете через поисковый API Serper
+// Поиск свежих данных в интернете через поисковый API Serper
 async function searchWeb(query, timeoutMs) {
   const key = process.env.SERPER_API_KEY;
   if (!key || timeoutMs < 200) return "";
@@ -259,7 +291,7 @@ async function searchWeb(query, timeoutMs) {
   }
 }
 
-// Функция генерации ответа через Gemini REST API с передачей системных инструкций
+// Генерация ответа через Gemini REST API
 async function askGemini(text, history, searchContext, timeoutMs) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("MISSING_GEMINI_KEY");
@@ -268,7 +300,6 @@ async function askGemini(text, history, searchContext, timeoutMs) {
   const model = String(DEFAULT_MODEL).trim();
   const normalizedHistory = safeHistory(history);
 
-  // Формирование структуры сообщений contents для Gemini API
   const contents = normalizedHistory.map(item => ({
     role: item.role,
     parts: [{ text: item.text }]
@@ -278,7 +309,6 @@ async function askGemini(text, history, searchContext, timeoutMs) {
     ? `${text}\n\n[Актуальные факты из интернета]: ${searchContext}`
     : text;
 
-  // Если последнее сообщение в истории уже было от пользователя, объединяем с ним
   if (contents.length > 0 && contents[contents.length - 1].role === "user") {
     contents[contents.length - 1].parts[0].text += `\n${userPrompt}`;
   } else {
@@ -325,7 +355,7 @@ async function askGemini(text, history, searchContext, timeoutMs) {
   return cleanMarkdown(answer);
 }
 
-// Функция сопоставления технических кодов ошибок с понятными фразами для Алисы
+// Сопоставление технических кодов ошибок с понятными фразами для Алисы
 function errorForUser(error) {
   const msg = error?.name === "AbortError" ? "TIME_BUDGET_EXHAUSTED" : error?.message;
 
@@ -347,7 +377,6 @@ function errorForUser(error) {
 
 // Основная точка входа для обработки вебхуков от Яндекс Диалогов
 export default async function handler(req, res) {
-  // Обработка GET-запроса для проверки работоспособности сервиса
   if (req.method === "GET") {
     return res.status(200).json({
       ok: true,
@@ -357,28 +386,28 @@ export default async function handler(req, res) {
     });
   }
 
-  // Отклонение неподдерживаемых HTTP-методов
   if (req.method !== "POST") {
     res.setHeader("Allow", "GET, POST");
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // Засекаем время старта для строгого контроля общего лимита Алисы
   const startedAt = Date.now();
   const remainingMs = () => TOTAL_RESPONSE_BUDGET_MS - (Date.now() - startedAt);
 
-  // Извлечение данных входящего запроса от Яндекс Диалогов
   const body = req.body && typeof req.body === "object" ? req.body : {};
   const isNewSession = Boolean(body?.session?.new);
-  const text = String(body?.request?.command || body?.request?.original_utterance || "").trim();
+  
+  const payloadText = typeof body?.request?.payload === "string" 
+    ? body.request.payload 
+    : (body?.request?.payload?.title || "");
+  const text = String(body?.request?.command || body?.request?.original_utterance || payloadText || "").trim();
 
-  // Извлечение постоянного состояния пользователя и истории сообщений
   const userState = body?.state?.user && typeof body.state.user === "object" ? body.state.user : {};
   const currentHistory = isNewSession
     ? []
     : safeHistory(body?.state?.session?.history || userState.history);
 
-  // Обработка первого входа пользователя в навык
+  // Первый вход в навык
   if (isNewSession && !text) {
     return res.status(200).json(aliceResponse(
       "Привет! Я Джимини. Задавайте любой вопрос, и я быстро отвечу или найду нужную информацию в сети.",
@@ -391,7 +420,7 @@ export default async function handler(req, res) {
     ));
   }
 
-  // Ответ на пустой ввод пользователя
+  // Пустой запрос
   if (!text) {
     return res.status(200).json(aliceResponse(
       "Я вас слушаю. Задайте вопрос или попросите что-нибудь найти.",
@@ -404,7 +433,20 @@ export default async function handler(req, res) {
     ));
   }
 
-  // Завершение сессии по команде выхода
+  // Диагностический пинг навыка
+  if (isPingIntent(text)) {
+    return res.status(200).json(aliceResponse(
+      "Понг! Сервис работает в штатном режиме.",
+      {
+        endSession: false,
+        history: currentHistory,
+        userState,
+        buttons: getActionButtons(false)
+      }
+    ));
+  }
+
+  // Завершение диалога
   if (isExitIntent(text)) {
     return res.status(200).json(aliceResponse(
       "До встречи! Обращайтесь, если снова понадобится помощь.",
@@ -416,7 +458,7 @@ export default async function handler(req, res) {
     ));
   }
 
-  // Обработка запроса справки и возможностей навыка
+  // Справка
   if (isHelpIntent(text)) {
     return res.status(200).json(aliceResponse(
       "Я умею отвечать на любые вопросы с помощью нейросети Gemini, а также искать свежие факты и курсы валют в интернете. Просто спросите то, что вам интересно.",
@@ -429,7 +471,7 @@ export default async function handler(req, res) {
     ));
   }
 
-  // Сброс контекста беседы по желанию пользователя
+  // Сброс контекста
   if (isResetIntent(text)) {
     const clearedUserState = { ...userState, history: [] };
     return res.status(200).json(aliceResponse(
@@ -443,10 +485,25 @@ export default async function handler(req, res) {
     ));
   }
 
+  // Повтор последней реплики
+  if (isRepeatIntent(text)) {
+    const lastModelMessage = [...currentHistory].reverse().find(m => m.role === "model");
+    if (lastModelMessage?.text) {
+      return res.status(200).json(aliceResponse(
+        lastModelMessage.text,
+        {
+          endSession: false,
+          history: currentHistory,
+          userState,
+          buttons: getActionButtons(false)
+        }
+      ));
+    }
+  }
+
   try {
     let searchContext = "";
 
-    // Поиск в сети при обнаружении поискового намерения
     if (isSearchIntent(text) && process.env.SERPER_API_KEY) {
       searchContext = await searchWeb(
         text,
@@ -454,7 +511,6 @@ export default async function handler(req, res) {
       );
     }
 
-    // Запрос генерации текста у нейросети Gemini
     const answer = await askGemini(
       text,
       currentHistory,
@@ -462,20 +518,17 @@ export default async function handler(req, res) {
       Math.max(0, Math.min(GEMINI_TIMEOUT_MS, remainingMs() - 350))
     );
 
-    // Добавление новой реплики в историю диалога
     const updatedHistory = safeHistory([
       ...currentHistory,
       { role: "user", text: text.slice(0, MAX_HISTORY_MESSAGE_CHARS) },
       { role: "model", text: answer.slice(0, MAX_HISTORY_MESSAGE_CHARS) }
     ]);
 
-    // Обновление постоянного хранилища пользователя
     const newUserState = {
       ...userState,
       history: updatedHistory
     };
 
-    // Возврат успешного ответа голосовому ассистенту
     return res.status(200).json(aliceResponse(
       answer,
       {
@@ -486,7 +539,6 @@ export default async function handler(req, res) {
       }
     ));
   } catch (error) {
-    // Безопасный перехват ошибок и озвучивание понятного сообщения
     return res.status(200).json(aliceResponse(
       errorForUser(error),
       {
@@ -499,7 +551,6 @@ export default async function handler(req, res) {
   }
 }
 
-// Экспорт вспомогательных функций для тестирования и внешнего вызова
 export {
   aliceResponse,
   fitAliceText,
@@ -509,6 +560,7 @@ export {
   isExitIntent,
   isHelpIntent,
   isResetIntent,
+  isRepeatIntent,
+  isPingIntent,
   safeHistory
 };
-```
